@@ -1,19 +1,19 @@
 -module(linkchecker_worker).
 -behaviour(gen_server).
 
--export([start_link/0, check/3]).
+-export([start_link/3]).
 -export([init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
 -import(httpc,[request/4]).
 
-start_link() ->
-  gen_server:start_link({ local, ?MODULE}, ?MODULE, [], []).
-
+start_link(Domain, Limit, Pid) ->
+  gen_server:start_link({ local, ?MODULE}, ?MODULE, [Domain, Limit, Pid], []).
 
 % -----------------------
 
-init([]) ->
+init([Domain, Limit, Pid]) ->
+  gen_server:cast(?MODULE, { check, Domain, Limit, Pid }),
   {ok, []}.
 
 handle_call(_Message, _From, State) ->

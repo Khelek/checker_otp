@@ -9,14 +9,13 @@ start_link() ->
   gen_server:start_link({ local, ?MODULE}, ?MODULE, [], []).
 
 init([Domain, Limit, Pid]) ->
-  gen_server:cast(?MODULE, { check, Domain, Limit, Pid }).
+  gen_server:cast(?MODULE, { check, Domain, Limit, Pid }),
   {ok, []}.
 
 handle_call(_Message, _From, State) ->
   { reply, invalid_command, State }.
 
 handle_cast({ check, Domain, Limit, Pid }, State) ->
-  check_all(Domain, Limit, Pid),
   { noreply, State };
 handle_cast(_Message, State) ->
   { noreply, State }.
