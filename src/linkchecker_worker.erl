@@ -12,8 +12,6 @@ start_link() ->
 
 
 % -----------------------
-check(Domain, Limit, Pid) ->
-  gen_server:cast(?MODULE, { check, Domain, Limit, Pid }).
 
 init([]) ->
   {ok, []}.

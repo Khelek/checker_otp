@@ -6,7 +6,7 @@ start() ->
   {ok, _} = application:ensure_all_started(?MODULE).
 
 stop() ->
-  Apps = [sync, checker_otp, poolboy, inets],
+  Apps = [sync, checker_otp, poolboy, inets, ibrowse],
   [application:stop(App) || App <- Apps],
   ok.
 
