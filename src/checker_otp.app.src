@@ -5,7 +5,7 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib, sync
+                  stdlib, sync, inets
                  ]},
   {mod, { checker_otp_app, []}},
   {env, []}
