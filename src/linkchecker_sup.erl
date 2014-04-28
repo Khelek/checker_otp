@@ -1,4 +1,4 @@
--module(dispatcher_sup).
+-module(linkchecker_sup).
 -behaviour(supervisor).
 
 -export([start_link/0, create_child/3]).
