@@ -2,13 +2,11 @@
 -include_lib("eunit/include/eunit.hrl").
 
 checker_otp_test_() ->
-  {setup,
+  {foreach,
    fun start/0,
    fun stop/1,
-   fun(Setup) ->
-       {inparallel,
-        [check()]}
-   end}.
+   [fun check/0
+   ]}.
 
 start() ->
   checker_otp:start().
@@ -29,8 +27,8 @@ check() ->
                  end,
   meck:expect(httpc, request, MockFunc),
   checker_otp:check("http://erlang.fake/", 5),
-
-  ResultList = [], %catch_check_messages([]),
+  
+  ResultList = catch_check_messages([]),
   ExpectedList = [{404,"http://erlang.fake/very_evil"},
                   {200,"http://erlang.fake/link2"},
                   {404,"http://erlang.fake/evil"},

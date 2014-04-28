@@ -1,7 +1,7 @@
 -module(linkchecker_worker).
 -behaviour(gen_server).
 
--export([start_link/0, hello/0, get_hello_count/0, check/3]).
+-export([start_link/0, check/3]).
 -export([init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
@@ -15,20 +15,9 @@ start_link() ->
 check(Domain, Limit, Pid) ->
   gen_server:cast(?MODULE, { check, Domain, Limit, Pid }).
 
-hello() ->
-  gen_server:call(?MODULE, { hello }).
-
-get_hello_count() ->
-  gen_server:call(?MODULE, { hello_counter }).
-
 init([]) ->
-  {ok, { hello_counter, 0}}.
+  {ok, []}.
 
-handle_call({ hello }, _From, { hello_counter, Counter }) ->
-  NewState = { hello_counter, Counter + 1 },
-  { reply, { ok, "Hello!" }, NewState };
-handle_call({ hello_counter }, _From, State) ->
-  { reply, { ok, State }, State };
 handle_call(_Message, _From, State) ->
   { reply, invalid_command, State }.
 

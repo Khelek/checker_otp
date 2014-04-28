@@ -1,5 +1,6 @@
 REBAR="rebar"
 
+all: get-deps compile
 clean:
 	$(REBAR) clean
 
