@@ -19,7 +19,6 @@ handle_call(_Message, _From, State) ->
 
 handle_cast({ request, Link, Pid }, Statuses) ->
   {ibrowse_req_id, ReqID} = ibrowse:send_req(Link, [], get, [], [{stream_to, self()}]),
-  erlang:display(["ibrowse request", {Link, Pid, ReqID}]),
   El = {ReqID, Link, Pid, []},
   { noreply, [El | Statuses] };
 handle_cast(_Message, State) ->
@@ -27,11 +26,9 @@ handle_cast(_Message, State) ->
 
 handle_info({ibrowse_async_headers, ReqID, StatusCode, _Headers}, Statuses) ->
   {value, {ReqID, Link, Pid, []}, NewStatuses} = lists:keytake(ReqID, 1, Statuses),
-  erlang:display([headers, StatusCode]),
   { noreply, [{ReqID, Link, Pid, [StatusCode]} | Statuses] };
 handle_info({ibrowse_async_response, ReqID, Body}, Statuses) ->
   {value, El = {ReqID, Link, Pid, [StatusCode]}, NewStatuses} = lists:keytake(ReqID, 1, Statuses),
-  erlang:display([request_to_pid, El]),
   Pid ! {response, Link, StatusCode, Body},
   { noreply, NewStatuses }.
   

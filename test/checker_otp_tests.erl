@@ -34,14 +34,13 @@ check() ->
                   {404,"http://erlang.fake/evil"},
                   {200,"http://erlang.fake/link1"},
                   {200,"http://erlang.fake/"}],
-  ?_assertEqual(lists:sort(ExpectedList), lists:sort(ResultList)),
-  ?_assert(meck:validate(ibrowse)),
-
-  meck:unload(ibrowse).
+  ?assert(meck:validate(ibrowse)),
+  meck:unload(ibrowse),
+  ?assertEqual(lists:sort(ExpectedList), lists:sort(ResultList)).
 
 catch_check_messages(ListResults) ->
   receive
-    {ok, proccess_end} ->
+    {ok, process_end} ->
       ListResults;
     {StatusCode, Link} ->
       catch_check_messages([{StatusCode, Link} | ListResults])
