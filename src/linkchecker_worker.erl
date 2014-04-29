@@ -10,8 +10,6 @@ start_link(Link, Limit, Pid) ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [Link, Limit, Pid], []).
 
 %%TODO обрабатывать EXIT request_worker'a, или сделать в нем обработку ошибок
-
-%% TODO link is ONLY domain. сделать, чтобы это было не так, http_uri:parse
 cast_request_worker(Link) ->
   gen_server:cast(request_worker, {request, Link, self()}).
 
@@ -19,10 +17,10 @@ check_link(Link) ->
   gen_server:cast(?MODULE, { check, Link }).
 
 init([Link, Limit, Pid]) ->
-  check_link(Link),
+  cast_request_worker(Link),
   case http_uri:parse(Link) of
     {ok, {http,_, Domain, _, _, _}} ->
-      {ok, {Domain, [], sets:new(), Pid, Limit, 0}};
+      {ok, {Domain, [], sets:new(), Pid, Limit, 1}};
     {ok, {https, _, _, _, _, _}} -> 
       Pid ! {error, not_working_with_https},
       {stop, normal, {error, not_working_with_https}};
@@ -34,27 +32,23 @@ init([Link, Limit, Pid]) ->
 handle_call(_Message, _From, State) ->
   { reply, invalid_command, State }.
 
-handle_cast({ check, Link }, {Domain, ProcessedLinks, Visited, ClientPid, Limit, RequestCount}) ->
-  erlang:display(["to request worker", Link]),
-  cast_request_worker(Link),
-  { noreply, {Domain, ProcessedLinks, Visited, ClientPid, Limit, RequestCount + 1}};
 handle_cast(_Message, State) ->
   { noreply, State }.
 
 %% FIXME может вместо большого tupla лучше подойдут рекорды
-handle_info({response, Link, StatusCode, Body}, State = {Domain, ProcessedLinks, Visited, ClientPid, Limit, RequestCount}) ->
+handle_info({response, Link, StatusCode, Body}, State = {Domain, ProcessedLinks, Visited, ClientPid, Limit, RequestsCount}) ->
+  ClientPid ! {StatusCode, Link},
   erlang:display(["response from request worker", Link, StatusCode, Body]),
   Links = get_links(Body, Domain),
-  ClientPid ! {StatusCode, Link},
-  {ProcessLinks, NewVisited} = process_links(Links, Visited),
-  case {ProcessLinks, RequestCount - 1} of
-    {[], 0} -> 
+  {ProcessLinksCount, NewVisited} = process_links(Links, Visited),
+  case RequestsCount - 1 + ProcessLinksCount of
+    0 -> 
       erlang:display(["end", Link]),
       ClientPid ! {ok, process_end},
       {stop, normal, State};
-    {ProcessLinks, NewRequestCount} ->
+    NewRequestsCount ->
       erlang:display(["noreply", Link]),
-      { noreply, {Domain, [{StatusCode, Link} | ProcessedLinks], NewVisited, ClientPid, Limit, NewRequestCount} }
+      { noreply, {Domain, [{StatusCode, Link} | ProcessedLinks], NewVisited, ClientPid, Limit, NewRequestsCount} }
   end;
 handle_info(_Message, State) ->
   { noreply, State }.
@@ -66,19 +60,18 @@ code_change(_OldVersion, State, _Extra) ->
   { ok, State }.
 
 process_links(Links, Visited) ->
-  process_links(Links, Visited, []).
+  process_links(Links, Visited, 0).
 
-process_links([], Visited, ProcessLinks) ->
-  {ProcessLinks, Visited};
-process_links([Current | RestLinks], Visited, ProcessLinks) ->
-  {NewProcessLinks, NewVisited} = case sets:is_element(Current, Visited) of
+process_links([], Visited, RequestsCount) ->
+  {RequestsCount, Visited};
+process_links([Current | RestLinks], Visited, RequestsCount) ->
+  case sets:is_element(Current, Visited) of
     false ->
-      check_link(Current),
-      {[Current | ProcessLinks], sets:add_element(Current, Visited)};
+      cast_request_worker(Current),
+      process_links(RestLinks, sets:add_element(Current, Visited), RequestsCount + 1);
     true ->
-      {ProcessLinks, Visited}
-  end,
-  process_links(RestLinks, NewVisited, NewProcessLinks).
+      process_links(RestLinks, Visited, RequestsCount)
+  end.
 
 
 
