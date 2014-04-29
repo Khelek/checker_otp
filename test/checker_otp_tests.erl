@@ -43,10 +43,14 @@ check_with_limit() ->
                   {200,"http://erlang.fake/link2"},
                   {404,"http://erlang.fake/evil"},
                   {200,"http://erlang.fake/link1"},
+                  {404,"http://erlang.fake/good"},
                   {200,"http://erlang.fake/"}],
   ?assert(meck:validate(ibrowse)),
   meck:unload(ibrowse),
-  ?assertEqual(lists:sort(ExpectedList), lists:sort(ResultList)).
+  ?assert([] == lists:subtract(ResultList, ExpectedList)),
+  ?assert(5 == length(ResultList)).
+%% TODO если вместо assert сделать assertEqual, то засчитывается почему то только тот, 
+%% что в конце функции, а другие, даже зайфейлившиеся, нет. WAT?
 
 catch_check_messages(ListResults) ->
   receive

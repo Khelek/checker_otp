@@ -20,7 +20,7 @@ init([Link, Limit, Pid]) ->
   cast_request_worker(Link),
   case http_uri:parse(Link) of
     {ok, {http,_, Domain, _, _, _}} ->
-      {ok, {Domain, [], sets:new(), Pid, Limit, 1}};
+      {ok, {Domain, [], sets:new(), Pid, Limit - 1, 1}};
     {ok, {https, _, _, _, _, _}} -> 
       Pid ! {error, not_working_with_https},
       {stop, normal, {error, not_working_with_https}};
@@ -38,17 +38,14 @@ handle_cast(_Message, State) ->
 %% FIXME может вместо большого tupla лучше подойдут рекорды
 handle_info({response, Link, StatusCode, Body}, State = {Domain, ProcessedLinks, Visited, ClientPid, Limit, RequestsCount}) ->
   ClientPid ! {StatusCode, Link},
-  erlang:display(["response from request worker", Link, StatusCode, Body]),
   Links = get_links(Body, Domain),
-  {ProcessLinksCount, NewVisited} = process_links(Links, Visited),
+  {ProcessLinksCount, NewVisited, NewLimit} = process_links(Links, Visited, Limit),
   case RequestsCount - 1 + ProcessLinksCount of
     0 -> 
-      erlang:display(["end", Link]),
       ClientPid ! {ok, process_end},
       {stop, normal, State};
     NewRequestsCount ->
-      erlang:display(["noreply", Link]),
-      { noreply, {Domain, [{StatusCode, Link} | ProcessedLinks], NewVisited, ClientPid, Limit, NewRequestsCount} }
+      { noreply, {Domain, [{StatusCode, Link} | ProcessedLinks], NewVisited, ClientPid, NewLimit, NewRequestsCount} }
   end;
 handle_info(_Message, State) ->
   { noreply, State }.
@@ -59,54 +56,21 @@ terminate(_Reason, _State) ->
 code_change(_OldVersion, State, _Extra) ->
   { ok, State }.
 
-process_links(Links, Visited) ->
-  process_links(Links, Visited, 0).
+process_links(Links, Visited, Limit) ->
+  process_links(Links, Visited, Limit, 0).
 
-process_links([], Visited, RequestsCount) ->
-  {RequestsCount, Visited};
-process_links([Current | RestLinks], Visited, RequestsCount) ->
+process_links(_, Visited, 0, RequestsCount) ->
+  {RequestsCount, Visited, 0};
+process_links([], Visited, Limit, RequestsCount) ->
+  {RequestsCount, Visited, Limit};
+process_links([Current | RestLinks], Visited, Limit, RequestsCount) ->
   case sets:is_element(Current, Visited) of
     false ->
       cast_request_worker(Current),
-      process_links(RestLinks, sets:add_element(Current, Visited), RequestsCount + 1);
+      process_links(RestLinks, sets:add_element(Current, Visited), Limit - 1, RequestsCount + 1);
     true ->
-      process_links(RestLinks, Visited, RequestsCount)
+      process_links(RestLinks, Visited, Limit, RequestsCount)
   end.
-
-
-
-% check_all(URL, LinksCount, Pid) ->
-%   case http_uri:parse(URL) of
-%     {ok, {http,_, Domain, _, _, _}} ->
-%       Set = sets:new(),
-% %      spawn_link(link_checker, collect_links, [[URL], Set, Domain, LinksCount, self()]);
-%       collect_links([URL], Set, Domain, LinksCount, Pid);
-%     {ok, {https, _, _, _, _, _}} -> {error, not_working_with_https};
-%     Error -> Error
-%   end.
-
-% collect_links(Links, _, _, Limit, Pid) when Links == [] orelse Limit == 0 ->
-%   Pid ! {ok, proccess_end};
-% collect_links([Current | Rest], VisitedExceptCurrent, Domain, Limit, Pid) ->
-%   timer:sleep(200),
-%   case sets:is_element(Current, VisitedExceptCurrent) of
-%     false ->
-%       Visited = sets:add_element(Current, VisitedExceptCurrent),
-%       case request(Current) of
-%         {200, Body} ->
-%           Pid ! {200, Current},
-%           ToCheck = get_links(Body, Domain) ++ Rest,
-%           collect_links(ToCheck, Visited, Domain, Limit - 1, Pid);
-%         {Status, _Body} ->
-%           Pid ! {Status, Current}, 
-%           collect_links(Rest, Visited, Domain, Limit - 1, Pid)
-%       end;
-%     true ->
-%       collect_links(Rest, VisitedExceptCurrent, Domain, Limit, Pid)
-%   end.
-
-
-
 
 get_links(Body, Domain) ->
   ExtractedLinks = extract_links(Body, Domain),

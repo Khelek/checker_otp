@@ -24,11 +24,12 @@ handle_cast({ request, Link, Pid }, Statuses) ->
 handle_cast(_Message, State) ->
   { noreply, State }.
 
+%% TODO add tests to deffered links and limit
 handle_info({ibrowse_async_headers, ReqID, StatusCode, _Headers}, Statuses) ->
   {value, {ReqID, Link, Pid, []}, NewStatuses} = lists:keytake(ReqID, 1, Statuses),
   { noreply, [{ReqID, Link, Pid, [StatusCode]} | Statuses] };
 handle_info({ibrowse_async_response, ReqID, Body}, Statuses) ->
-  {value, El = {ReqID, Link, Pid, [StatusCode]}, NewStatuses} = lists:keytake(ReqID, 1, Statuses),
+  {value, {ReqID, Link, Pid, [StatusCode]}, NewStatuses} = lists:keytake(ReqID, 1, Statuses),
   Pid ! {response, Link, StatusCode, Body},
   { noreply, NewStatuses }.
   
