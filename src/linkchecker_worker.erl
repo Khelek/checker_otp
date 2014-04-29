@@ -35,6 +35,7 @@ code_change(_OldVersion, State, _Extra) ->
   { ok, State }.
 
 % LinkChecker Impl
+% TODO add expected count, cast с тегом что пришли новые ссылки, если статус не 200 и боди нет, то уменьшаем count на 1, если count 0 выходим
 
 check_all(URL, LinksCount, Pid) ->
   case http_uri:parse(URL) of
