@@ -10,11 +10,6 @@ start_link(Link, Limit, Pid) ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [Link, Limit, Pid], []).
 
 %%TODO обрабатывать EXIT request_worker'a, или сделать в нем обработку ошибок
-cast_request_worker(Link) ->
-  gen_server:cast(request_worker, {request, Link, self()}).
-
-check_link(Link) ->
-  gen_server:cast(?MODULE, { check, Link }).
 
 init([Link, Limit, Pid]) ->
   cast_request_worker(Link),
@@ -55,6 +50,12 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVersion, State, _Extra) ->
   { ok, State }.
+
+cast_request_worker(Link) ->
+  gen_server:cast(request_worker, {request, Link, self()}).
+
+check_link(Link) ->
+  gen_server:cast(?MODULE, { check, Link }).
 
 process_links(Links, Visited, Limit) ->
   process_links(Links, Visited, Limit, 0).
