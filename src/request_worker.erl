@@ -17,28 +17,23 @@ init([]) ->
 handle_call(_Message, _From, State) ->
   { reply, invalid_command, State }.
 
-handle_cast({ request, Link, Pid }, {Links, Pids, Statuses}) ->
-  {ibrowse_req_id, ReqID} = ibrowse:send_req(Link, [], post, [], [{stream_to, self()}]),
-  erlang:display("ibowse request"),
-  { noreply, {[{ReqID, Link} | Links], [{ReqID, Pid} | Pids], Statuses} };
+handle_cast({ request, Link, Pid }, Statuses) ->
+  {ibrowse_req_id, ReqID} = ibrowse:send_req(Link, [], get, [], [{stream_to, self()}]),
+  erlang:display(["ibrowse request", {Link, Pid, ReqID}]),
+  El = {ReqID, Link, Pid, []},
+  { noreply, [El | Statuses] };
 handle_cast(_Message, State) ->
   { noreply, State }.
 
-handle_info({ibrowse_async_headers, ReqID, StatusCode, _Headers}, {Links, Pids, StatusCodes}) ->
-  erlang:display(StatusCode),
-  { noreply, {Links, Pids, [{ReqID, StatusCode} | StatusCodes]} };
-handle_info({ibrowse_async_response, ReqID, Body}, {Links, Pids, StatusCodes}) ->
-  
-  [ElLink || ElLink = {ReqID, _Link} <- Links],
-  [ElStatus || ElStatus = {ReqID, StatusCode} <- StatusCodes],
-  [ElPid || ElPid = {ReqID, _FromPid} <- Pids],
-
-
-
-  linkchecker ! {response, Link, StatusCode, Body}.
-
-
-  { noreply, State }.
+handle_info({ibrowse_async_headers, ReqID, StatusCode, _Headers}, Statuses) ->
+  {value, {ReqID, Link, Pid, []}, NewStatuses} = lists:keytake(ReqID, 1, Statuses),
+  erlang:display([headers, StatusCode]),
+  { noreply, [{ReqID, Link, Pid, [StatusCode]} | Statuses] };
+handle_info({ibrowse_async_response, ReqID, Body}, Statuses) ->
+  {value, El = {ReqID, Link, Pid, [StatusCode]}, NewStatuses} = lists:keytake(ReqID, 1, Statuses),
+  erlang:display([request_to_pid, El]),
+  Pid ! {response, Link, StatusCode, Body},
+  { noreply, NewStatuses }.
   
 terminate(_Reason, _State) ->
   ok.

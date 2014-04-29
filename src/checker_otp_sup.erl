@@ -10,5 +10,5 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-  Childs = [?CHILD(dispatcher_sup, supervisor), ?CHILD(request_worker, worker)],
+  Childs = [?CHILD(linkchecker_sup, supervisor), ?CHILD(request_worker, worker)],
   {ok, {{one_for_one, 10, 10}, Childs}}.
