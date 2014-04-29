@@ -11,4 +11,4 @@ stop() ->
   ok.
 
 check(URL, Limit) ->
-	dispatcher_sup:create_child(URL, Limit, self()).
+	linkchecker_sup:create_child(URL, Limit, self()).

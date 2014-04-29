@@ -20,11 +20,14 @@ handle_call(_Message, _From, State) ->
   { reply, invalid_command, State }.
 
 handle_cast({ check, Domain, Limit, Pid }, State) ->
-  check_all(Domain, Limit, Pid),
+  gen_server:cast(request_worker, {request, Link, self()}),
+
   { noreply, State };
 handle_cast(_Message, State) ->
   { noreply, State }.
 
+handle_info({_Message}, State) ->
+  check_all(Domain, Limit, Pid);
 handle_info(_Message, State) ->
   { noreply, State }.
 
