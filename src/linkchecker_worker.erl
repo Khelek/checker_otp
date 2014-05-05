@@ -12,10 +12,11 @@ start_link(Link, Limit, Pid) ->
 %%TODO обрабатывать EXIT request_worker'a, или сделать в нем обработку ошибок
 
 init([Link, Limit, Pid]) ->
-  cast_request_worker(Link),
+  erlang:display(["HAALLOOUU, NEW WORKER INIT!!!", self()]),
+  send_request(Link),
   case http_uri:parse(Link) of
     {ok, {http,_, Domain, _, _, _}} ->
-      {ok, {Domain, [], sets:new(), Pid, Limit - 1, 1}};
+      {ok, {Domain, sets:new(), Pid, Limit - 1, 1}};
     {ok, {https, _, _, _, _, _}} -> 
       Pid ! {error, not_working_with_https},
       {stop, normal, {error, not_working_with_https}};
@@ -25,33 +26,37 @@ init([Link, Limit, Pid]) ->
   end.
 
 handle_call(_Message, _From, State) ->
-  { reply, invalid_command, State }.
+  {reply, invalid_command, State}.
 
 handle_cast(_Message, State) ->
-  { noreply, State }.
+  {noreply, State}.
 
 %% FIXME может вместо большого tupla лучше подойдут рекорды
-handle_info({response, Link, StatusCode, Body}, State = {Domain, ProcessedLinks, Visited, ClientPid, Limit, RequestsCount}) ->
+handle_info({response, Link, StatusCode, Body}, 
+            State = {Domain, Visited, ClientPid, Limit, WaitingsCount}) ->
   ClientPid ! {StatusCode, Link},
   Links = get_links(Body, Domain),
   {ProcessLinksCount, NewVisited, NewLimit} = process_links(Links, Visited, Limit),
-  case RequestsCount - 1 + ProcessLinksCount of
+  case WaitingsCount - 1 + ProcessLinksCount of
     0 -> 
+      erlang:display(["I AM END", self()]),
       ClientPid ! {ok, process_end},
       {stop, normal, State};
-    NewRequestsCount ->
-      { noreply, {Domain, [{StatusCode, Link} | ProcessedLinks], NewVisited, ClientPid, NewLimit, NewRequestsCount} }
+    NewWaitingsCount ->
+      erlang:display(["I WAITING", self(), NewWaitingsCount]),
+      {noreply, {Domain, NewVisited, ClientPid, NewLimit, NewWaitingsCount}}
   end;
 handle_info(_Message, State) ->
   { noreply, State }.
 
 terminate(_Reason, _State) ->
+  erlang:display(["WORKER DEAD!!!", self()]),
   ok.
 
 code_change(_OldVersion, State, _Extra) ->
   { ok, State }.
 
-cast_request_worker(Link) ->
+send_request(Link) ->
   gen_server:cast(request_worker, {request, Link, self()}).
 
 check_link(Link) ->
@@ -60,17 +65,18 @@ check_link(Link) ->
 process_links(Links, Visited, Limit) ->
   process_links(Links, Visited, Limit, 0).
 
-process_links(_, Visited, 0, RequestsCount) ->
-  {RequestsCount, Visited, 0};
-process_links([], Visited, Limit, RequestsCount) ->
-  {RequestsCount, Visited, Limit};
-process_links([Current | RestLinks], Visited, Limit, RequestsCount) ->
+process_links(_, Visited, 0, WaitingsCount) ->
+  {WaitingsCount, Visited, 0};
+process_links([], Visited, Limit, WaitingsCount) ->
+  {WaitingsCount, Visited, Limit};
+process_links([Current | RestLinks], Visited, Limit, WaitingsCount) ->
   case sets:is_element(Current, Visited) of
     false ->
-      cast_request_worker(Current),
-      process_links(RestLinks, sets:add_element(Current, Visited), Limit - 1, RequestsCount + 1);
+      send_request(Current),
+      VisitedWithCurr = sets:add_element(Current, Visited),
+      process_links(RestLinks, VisitedWithCurr, Limit - 1, WaitingsCount + 1);
     true ->
-      process_links(RestLinks, Visited, Limit, RequestsCount)
+      process_links(RestLinks, Visited, Limit, WaitingsCount)
   end.
 
 get_links(Body, Domain) ->

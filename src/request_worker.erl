@@ -13,8 +13,7 @@ request(Link, Pid) ->
 
 init([]) ->
   Waiting = queue:new(),
-  %% TODO add application env
-  Limit = 50,
+  Limit = 50, %% TODO add application env
   {ok, {[], Limit, Waiting}}.
 
 handle_call(_Message, _From, State) ->
@@ -37,12 +36,11 @@ handle_info({ibrowse_async_response, ReqId, Body}, {Statuses, Limit, Waiting}) -
   NewStatuses = append_body(ReqId, Statuses, Body),
   {noreply, {NewStatuses, Limit, Waiting}};
 handle_info({ibrowse_async_response_end, ReqId}, {Statuses, Limit, Waiting}) ->
-  {value, {ReqId, Link, Pid, ResponseChunks}, StateExceptCurrent} = lists:keytake(ReqId, 1, Statuses),
-  StatusCode = proplists:get_value(status_code, ResponseChunks),
-  Body = proplists:get_value(body, ResponseChunks),
-  Pid ! {response, Link, StatusCode, Body},
+  {{ReqId, Link, Pid, ResponseChunks}, StateWithoutCurr} = take_by_key(ReqId, Statuses),
+  [StatusCode, Body] = get_values([status_code, body], ResponseChunks),
+  response(Pid, Link, StatusCode, Body),
   NewWaiting = process_next_deferred_link(Waiting),
-  {noreply, {StateExceptCurrent, Limit + 1, NewWaiting}};
+  {noreply, {StateWithoutCurr, Limit + 1, NewWaiting}};
 handle_info(_Message, State) ->
   {noreply, State}.
   
@@ -52,20 +50,24 @@ terminate(_Reason, _State) ->
 code_change(_OldVersion, State, _Extra) ->
   { ok, State }.
 
-append_body(ReqId, Statuses, NewBody) ->
-  {value, {ReqId, Link, Pid, ResponseChunks}, StateExceptCurrent} = lists:keytake(ReqId, 1, Statuses),
-  case lists:keytake(body, 1, ResponseChunks) of
-    {value, {body, OldBody}, NewResponseChunks} ->
-      %% FIXME падает по таймату flatten'a при больших body
-      Body = lists:flatten([OldBody | NewBody]),
-      [{ReqId, Link, Pid, [{body, Body} | NewResponseChunks]} | StateExceptCurrent];
-    false ->
-      [{ReqId, Link, Pid, [{body, NewBody} | ResponseChunks]} | StateExceptCurrent]
-  end.
+response(Pid, Link, StatusCode, Body) ->
+  Pid ! {response, Link, StatusCode, Body}.
+
+append_body(ReqId, Statuses, Body) ->
+  {{ReqId, Link, Pid, ResponseChunks}, StateWithoutCurr} = take_by_key(ReqId, Statuses),
+  NewResponseChunks = case lists:keytake(body, 1, ResponseChunks) of
+                        {value, {body, OldBody}, ResponseChunksWithoutBody} ->
+                          NewBody = lists:flatten([OldBody | Body]), %% FIXME падает по таймату flatten'a при больших body
+                          [{body, NewBody} | ResponseChunksWithoutBody];
+                        false ->
+                          [{body, Body} | ResponseChunks]
+                      end,
+  [{ReqId, Link, Pid, NewResponseChunks} | StateWithoutCurr].
 
 push_status_code(ReqId, Statuses, StatusCode) ->  
-  {value, {ReqId, Link, Pid, ResponseChunks}, StateExceptCurrent} = lists:keytake(ReqId, 1, Statuses),
-  [{ReqId, Link, Pid, [{status_code, StatusCode} | ResponseChunks]} | StateExceptCurrent].
+  {{ReqId, Link, Pid, ResponseChunks}, StateWithoutCurr} = take_by_key(ReqId, Statuses),
+  NewResponseChunks = [{status_code, StatusCode} | ResponseChunks],
+  [{ReqId, Link, Pid, NewResponseChunks} | StateWithoutCurr].
 
 process_next_deferred_link(Waiting) ->
   case queue:out(Waiting) of
@@ -76,3 +78,9 @@ process_next_deferred_link(Waiting) ->
       Waiting
   end.
 
+take_by_key(Key, List) ->
+  {value, Value, ListWithoutValue} = lists:keytake(Key, 1, List),
+  {Value, ListWithoutValue}.
+
+get_values(Keys, Proplist) ->
+  [proplists:get_value(K, Proplist) || K <- Keys].
