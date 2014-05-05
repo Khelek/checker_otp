@@ -1,4 +1,4 @@
-REBAR="rebar"
+REBAR= ./rebar
 
 all: get-deps compile
 clean:
@@ -7,8 +7,11 @@ clean:
 get-deps:
 	$(REBAR) get-deps
 
-compile:
+compile: meck_compile
 	$(REBAR) compile
+
+meck_compile:
+	cd deps/meck && make get-deps compile 
 
 cleanapp:
 	$(REBAR) clean skip_deps=true
