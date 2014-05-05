@@ -23,9 +23,14 @@ handle_cast({request, Link, Pid}, {Statuses, 0, Waiting}) ->
   NewWaiting = queue:in({Link, Pid}, Waiting),
   {noreply, {Statuses, 0, NewWaiting}};
 handle_cast({request, Link, Pid}, {Statuses, Limit, Waiting}) ->
-  {ibrowse_req_id, ReqId} = ibrowse:send_req(Link, [], get, [], [{stream_to, self()}]),
-  El = {ReqId, Link, Pid, []},
-  {noreply, {[El | Statuses], Limit - 1, Waiting}};
+  case ibrowse:send_req(Link, [], get, [], [{stream_to, self()}]) of
+    {ibrowse_req_id, ReqId} ->
+      El = {ReqId, Link, Pid, []},
+      {noreply, {[El | Statuses], Limit - 1, Waiting}};
+    {error, Reason} ->
+      response_error(Pid, Link, Reason),
+      {noreply, {Statuses, Limit, Waiting}}
+  end;
 handle_cast(_Message, State) ->
   {noreply, State}.
 
@@ -52,6 +57,9 @@ code_change(_OldVersion, State, _Extra) ->
 
 response(Pid, Link, StatusCode, Body) ->
   Pid ! {response, Link, StatusCode, Body}.
+
+response_error(Pid, Link, Reason) ->
+  Pid ! {response, error, Link, Reason}.
 
 append_body(ReqId, Statuses, Body) ->
   {{ReqId, Link, Pid, ResponseChunks}, StateWithoutCurr} = take_by_key(ReqId, Statuses),

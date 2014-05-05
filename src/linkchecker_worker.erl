@@ -9,10 +9,7 @@
 start_link(Link, Limit, Pid) ->
   gen_server:start_link(?MODULE, [Link, Limit, Pid], []).
 
-%%TODO обрабатывать EXIT request_worker'a, или сделать в нем обработку ошибок
-
 init([Link, Limit, Pid]) ->
-  erlang:display(["HAALLOOUU, NEW WORKER INIT!!!", self()]),
   send_request(Link),
   case http_uri:parse(Link) of
     {ok, {http,_, Domain, _, _, _}} ->
@@ -31,7 +28,10 @@ handle_call(_Message, _From, State) ->
 handle_cast(_Message, State) ->
   {noreply, State}.
 
-%% FIXME может вместо большого tupla лучше подойдут рекорды
+handle_info({response, error, Link, Reason}, {_, _, ClientPid, _, _} = State) ->
+  ClientPid ! {error, Link, Reason},
+  ClientPid ! {ok, process_end},
+  {stop, normal, State};
 handle_info({response, Link, StatusCode, Body}, 
             State = {Domain, Visited, ClientPid, Limit, WaitingsCount}) ->
   ClientPid ! {StatusCode, Link},
@@ -39,18 +39,15 @@ handle_info({response, Link, StatusCode, Body},
   {ProcessLinksCount, NewVisited, NewLimit} = process_links(Links, Visited, Limit),
   case WaitingsCount - 1 + ProcessLinksCount of
     0 -> 
-      erlang:display(["I AM END", self()]),
       ClientPid ! {ok, process_end},
       {stop, normal, State};
     NewWaitingsCount ->
-      erlang:display(["I WAITING", self(), NewWaitingsCount]),
       {noreply, {Domain, NewVisited, ClientPid, NewLimit, NewWaitingsCount}}
   end;
 handle_info(_Message, State) ->
   { noreply, State }.
 
 terminate(_Reason, _State) ->
-  erlang:display(["WORKER DEAD!!!", self()]),
   ok.
 
 code_change(_OldVersion, State, _Extra) ->
