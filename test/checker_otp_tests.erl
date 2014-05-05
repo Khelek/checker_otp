@@ -15,6 +15,7 @@ start() ->
 stop(_) ->
   checker_otp:stop().
 
+%% TODO test limit
 check() ->
   meck:new(ibrowse),
   MockFunc = mock_requests_to_links(),
@@ -62,17 +63,26 @@ catch_check_messages(ListResults) ->
 
 mock_requests_to_links() ->
   fun("http://erlang.fake/", _, get, _, [{stream_to, Pid}]) -> 
-      ibrowse_response(Pid, 200, "hag<a href=\"/link1\"></a>asyhg<a href=\"erlang.fake/link2\">eoya<a href=\"/good\">oegnasohe");
+      ibrowse_response(Pid, 200, "hag<a href=\"/link1\"></a>asyhg", "<a href=\"erlang.fake/link2\">eoya<a href=\"/good\">oegnasohe");
      ("http://erlang.fake/link1", _, get, _, [{stream_to, Pid}]) -> 
       ibrowse_response(Pid, 200, "hag<a href=\"/link1\"></a>asy<a href=\"http://erlang.fake/evil\"></a>hg<a href=\"http://erlang.fake\">oegna");
      ("http://erlang.fake/link2", _, get, _, [{stream_to, Pid}]) -> 
-      ibrowse_response(Pid, 200, "hag<a href=\"/very_evil\"></a>asy<a href=\"http://erlang.fake/evil\"></a>h");
+      ibrowse_response(Pid, 200, "hag<a href=\"/very_evil\"></a>", "asy<a href=\"http://erlang.fake/evil\"></a>h");
      (_, _, get, _, [{stream_to, Pid}]) ->
       ibrowse_response(Pid, 404, "404 error")
   end.
 
+ibrowse_response(Pid, Status, Body, SecondBody) ->
+  ReqId = {Pid, random:uniform()},
+  Pid ! {ibrowse_async_headers, ReqId, Status, ["headers"]},
+  Pid ! {ibrowse_async_response, ReqId, Body},
+  Pid ! {ibrowse_async_response, ReqId, SecondBody},
+  Pid ! {ibrowse_async_response_end, ReqId},
+  {ibrowse_req_id, ReqId}.
+
 ibrowse_response(Pid, Status, Body) -> 
-  ReqID = {Pid, random:uniform()},
-  Pid ! {ibrowse_async_headers, ReqID, Status, ["headers"]},
-  Pid ! {ibrowse_async_response, ReqID, Body},
-  {ibrowse_req_id, ReqID}.
+  ReqId = {Pid, random:uniform()},
+  Pid ! {ibrowse_async_headers, ReqId, Status, ["headers"]},
+  Pid ! {ibrowse_async_response, ReqId, Body},
+  Pid ! {ibrowse_async_response_end, ReqId},
+  {ibrowse_req_id, ReqId}.

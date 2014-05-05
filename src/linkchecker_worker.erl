@@ -7,7 +7,7 @@
 
 
 start_link(Link, Limit, Pid) ->
-  gen_server:start_link({local, ?MODULE}, ?MODULE, [Link, Limit, Pid], []).
+  gen_server:start_link(?MODULE, [Link, Limit, Pid], []).
 
 %%TODO обрабатывать EXIT request_worker'a, или сделать в нем обработку ошибок
 
@@ -81,7 +81,7 @@ normalize_link(Domain, ResourcePath) ->
   lists:flatten(io_lib:format("http://~s/~s", [Domain, ResourcePath])).
 
 extract_links(Body, Domain) ->
-  RegExp = lists:flatten(io_lib:format("href=\"(?:http:\/\/)?(?:www\.)?(?:~s)?\/(?<href>[^\"]*)?\"", [Domain])),
+  RegExp = lists:flatten(io_lib:format("href=\"(?:http:\/\/)?(?:www\.)?(?:~s)?\/(?<href>[^\.\"]*(\.asp|\.html|\.html|\.php|))\"", [Domain])),
   case re:run(Body, RegExp, [global, {capture, [href], list}]) of
     {match, PageLinks} ->
       [Link || [Link] <- PageLinks];
