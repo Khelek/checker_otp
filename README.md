@@ -3,11 +3,11 @@
 ## How to install
 
 ```sh
-        make
+   make
 ```
 
 ## How to run test
 
 ```sh
-        make test
+   make test
 ```
