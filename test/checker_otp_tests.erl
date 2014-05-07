@@ -20,9 +20,7 @@ check() ->
   meck:new(ibrowse),
   MockFunc = mock_requests_to_links(),
   meck:expect(ibrowse, send_req, MockFunc),
-  checker_otp:check("http://erlang.fake/", 10000),
-  
-  ResultList = catch_check_messages([]),
+  {ok, ResultList} = checker_otp:check("http://erlang.fake/", 100, 100000),
   ExpectedList = [{404,"http://erlang.fake/very_evil"},
                   {200,"http://erlang.fake/link2"},
                   {404,"http://erlang.fake/evil"},
@@ -37,9 +35,7 @@ check_with_limit() ->
   meck:new(ibrowse),
   MockFunc = mock_requests_to_links(),
   meck:expect(ibrowse, send_req, MockFunc),
-  checker_otp:check("http://erlang.fake/", 5),
-  
-  ResultList = catch_check_messages([]),
+  {ok, ResultList} = checker_otp:check("http://erlang.fake/", 5, 100000),
   ExpectedList = [{404,"http://erlang.fake/very_evil"},
                   {200,"http://erlang.fake/link2"},
                   {404,"http://erlang.fake/evil"},
@@ -52,14 +48,6 @@ check_with_limit() ->
   ?assert(5 == length(ResultList)).
 %% TODO если вместо assert сделать assertEqual, то засчитывается почему то только тот, 
 %% что в конце функции, а другие, даже зайфейлившиеся, нет. WAT?
-
-catch_check_messages(ListResults) ->
-  receive
-    {ok, process_end} ->
-      ListResults;
-    {StatusCode, Link} ->
-      catch_check_messages([{StatusCode, Link} | ListResults])
-  end.
 
 mock_requests_to_links() ->
   fun("http://erlang.fake/", _, get, _, [{stream_to, Pid}]) -> 

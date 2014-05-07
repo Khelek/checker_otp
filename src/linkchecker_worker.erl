@@ -1,48 +1,49 @@
 -module(linkchecker_worker).
 -behaviour(gen_server).
 
--export([start_link/3]).
+-export([start_link/0]).
 -export([init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
 
-start_link(Link, Limit, Pid) ->
-  gen_server:start_link(?MODULE, [Link, Limit, Pid], []).
+start_link() ->
+  gen_server:start_link(?MODULE, [], []).
 
-init([Link, Limit, Pid]) ->
+init([]) ->
+  {ok, []}.
+
+handle_call({Link, Limit}, Pid, State) ->
   send_request(Link),
   case http_uri:parse(Link) of
     {ok, {http,_, Domain, _, _, _}} ->
-      {ok, {Domain, sets:new(), Pid, Limit - 1, 1}};
+      {noreply, {Domain, sets:new(), [], Pid, Limit - 1, 1}};
     {ok, {https, _, _, _, _, _}} -> 
-      Pid ! {error, not_working_with_https},
+      gen_server:reply(Pid, {error, not_working_with_https}),
       {stop, normal, {error, not_working_with_https}};
     Error -> 
-      Pid ! Error,
+      gen_server:reply(Pid, {error, Error}),
       {stop, normal, [Error]}
-  end.
-
+  end;
 handle_call(_Message, _From, State) ->
   {reply, invalid_command, State}.
 
 handle_cast(_Message, State) ->
   {noreply, State}.
 
-handle_info({response, error, Link, Reason}, {_, _, ClientPid, _, _} = State) ->
-  ClientPid ! {error, Link, Reason},
-  ClientPid ! {ok, process_end},
+handle_info({response, error, Link, Reason}, {_, _, Collected, ClientPid, _, _} = State) ->
+  gen_server:reply(ClientPid, {error, Reason, Collected}),
   {stop, normal, State};
 handle_info({response, Link, StatusCode, Body}, 
-            State = {Domain, Visited, ClientPid, Limit, WaitingsCount}) ->
-  ClientPid ! {StatusCode, Link},
+            State = {Domain, Visited, Collected, ClientPid, Limit, WaitingsCount}) ->
+  NewCollected = [{StatusCode, Link} | Collected],
   Links = get_links(Body, Domain),
   {ProcessLinksCount, NewVisited, NewLimit} = process_links(Links, Visited, Limit),
   case WaitingsCount - 1 + ProcessLinksCount of
     0 -> 
-      ClientPid ! {ok, process_end},
+      gen_server:reply(ClientPid, {ok, NewCollected}),
       {stop, normal, State};
     NewWaitingsCount ->
-      {noreply, {Domain, NewVisited, ClientPid, NewLimit, NewWaitingsCount}}
+      {noreply, {Domain, NewVisited, NewCollected, ClientPid, NewLimit, NewWaitingsCount}}
   end;
 handle_info(_Message, State) ->
   { noreply, State }.

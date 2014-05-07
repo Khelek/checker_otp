@@ -1,6 +1,6 @@
 -module(checker_otp).
 
--export([start/0, stop/0, check/2]).
+-export([start/0, stop/0, check/3]).
 
 start() ->
   {ok, _} = application:ensure_all_started(?MODULE).
@@ -10,5 +10,6 @@ stop() ->
   [application:stop(App) || App <- Apps],
   ok.
 
-check(URL, Limit) ->
-	linkchecker_sup:create_child(URL, Limit, self()).
+check(URL, Limit, Timeout) ->
+	{ok, Pid} = linkchecker_sup:create_child(),
+  gen_server:call(Pid, {URL, Limit}, Timeout).

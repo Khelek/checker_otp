@@ -1,7 +1,7 @@
 -module(linkchecker_sup).
 -behaviour(supervisor).
 
--export([start_link/0, create_child/3]).
+-export([start_link/0, create_child/0]).
 -export([init/1]).
 
 -define(CHILD(I, Type), {I, {I, start_link, []}, transient, 5000, Type, [I]}).
@@ -13,5 +13,5 @@ init([]) ->
  {ok, {{simple_one_for_one, 0, 1},
        [?CHILD(linkchecker_worker, worker)]}}.
 
-create_child(URL, Limit, Pid) ->
-  supervisor:start_child(?MODULE, [URL, Limit, Pid]).
+create_child() ->
+  supervisor:start_child(?MODULE, []).
